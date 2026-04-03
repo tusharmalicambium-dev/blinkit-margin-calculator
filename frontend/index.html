@@ -413,7 +413,31 @@
         rule_fulfillment_default: $("rule_fulfillment_default").value,
         rule_inwarding_default: $("rule_inwarding_default").value
       });
-      window.location.href = `/api/export?${params.toString()}`;
+      function exportToCSV() {
+  if (!STATE.rows.length) {
+    alert("No data to export");
+    return;
+  }
+
+  const headers = Object.keys(STATE.rows[0]);
+
+  const csv = [
+    headers.join(","),
+    ...STATE.rows.map(row =>
+      headers.map(h => `"${row[h] ?? ""}"`).join(",")
+    )
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "blinkit_export.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}}`;
     }
     function resetRules() { Object.entries(RULE_DEFAULTS).forEach(([id, value]) => setInput(id, value)); if (STATE.currentRow) { setInput("fulfillment_value", STATE.originalRow?.fulfillmentValue || RULE_DEFAULTS.rule_fulfillment_default); setInput("inwarding_value", STATE.originalRow?.inwardingValue || RULE_DEFAULTS.rule_inwarding_default); updateView(); } }
     document.addEventListener("DOMContentLoaded", () => {
@@ -423,7 +447,7 @@
       $("model").addEventListener("change", populateSkus);
       $("sku").addEventListener("change", loadSelectedRow);
       $("load_latest").addEventListener("click", loadLatest);
-      $("export_margin").addEventListener("click", exportMargin);
+      $("export_margin").addEventListener("click", exportToCSV);
       $("reset_rules").addEventListener("click", resetRules);
       $("reset_row").addEventListener("click", () => { if (STATE.originalRow) hydrateRow(STATE.originalRow); });
       $("file_input").addEventListener("change", async (event) => { const file = event.target.files[0]; if (!file) return; try { await uploadFile(file); } catch (error) { $("upload_status").textContent = error.message; } });
