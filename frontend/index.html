@@ -272,7 +272,16 @@
     function toNumber(value) { const n = parseFloat(String(value ?? 0).replace(/,/g, "").replace(/%/g, "")); return Number.isFinite(n) ? n : 0; }
     function setInput(id, value, digits = 2) { const el = $(id); if (!el) return; el.value = typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : (value ?? ""); }
     function setText(id, value, digits = 2) { const el = $(id); if (!el) return; el.textContent = typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : (value ?? ""); }
-    function filterSelect(inputId, selectId, values) { const query = ($(inputId).value || "").toLowerCase(); const filtered = values.filter((value) => value.toLowerCase().includes(query)); $(selectId).innerHTML = filtered.map((value) => `<option>${value}</option>`).join(""); if (filtered.length) $(selectId).value = filtered[0]; $(selectId).dispatchEvent(new Event("change")); }
+    function filterSelect(inputId, selectId, values) {
+  const query = ($(inputId).value || "").toLowerCase();
+  const filtered = values.filter(v =>
+    String(v).toLowerCase().includes(query)
+  );
+  const select = $(selectId);
+  // Only update options
+  select.innerHTML = filtered.map(v => `<option>${v}</option>`).join('');
+  // DO NOT trigger change automatically ❌
+}
     function getRowInput() { return { ...STATE.currentRow, blinkitSp: toNumber($("blinkit_pricing").value), weightKg: toNumber($("weight_kg").value), dpValue: toNumber($("dp_value").value), nlcValue: toNumber($("nlc_value").value), storage2Value: toNumber($("storage2_value").value), commissionValue: toNumber($("commission_value").value), commissionPctValue: toNumber($("commission_pct_value").value) }; }
     function getRules() { return { adPct: toNumber($("rule_ad_pct").value), returnPct: toNumber($("rule_return_pct").value), ohPct: toNumber($("rule_oh_pct").value), financePct: toNumber($("rule_finance_pct").value), gstPct: toNumber($("rule_gst_pct").value), shippingRate: toNumber($("rule_shipping_rate").value), targetMarginPct: toNumber($("rule_target_margin_pct").value), fulfillmentFixed: toNumber($("fulfillment_value").value || $("rule_fulfillment_default").value), inwardingFixed: toNumber($("inwarding_value").value || $("rule_inwarding_default").value) }; }
     function calculate(row) {
