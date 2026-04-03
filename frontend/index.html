@@ -62,7 +62,7 @@
     .kpi-cell::before { content: ""; position: absolute; left: 0; top: 18%; bottom: 18%; width: 3px; border-radius: 0 2px 2px 0; background: var(--green); }
     .kpi-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); margin-bottom: 5px; }
     .kpi-val { font-family: var(--mono); font-size: 23px; font-weight: 700; color: var(--text); }
-    .price-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .price-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
     .price-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 11px 12px; }
     .price-cell-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text3); margin-bottom: 4px; }
     .price-cell-val { font-family: var(--mono); font-size: 19px; font-weight: 700; color: var(--text); }
@@ -108,6 +108,7 @@
           <div class="s-row"><label>Finance %</label><input id="rule_finance_pct" value="3"></div>
           <div class="s-row"><label>GST %</label><input id="rule_gst_pct" value="18"></div>
           <div class="s-row"><label>Shipping Rate / KG</label><input id="rule_shipping_rate" value="15"></div>
+          <div class="s-row"><label>Target Margin %</label><input id="rule_target_margin_pct" value="10"></div>
           <div class="s-row"><label>Fulfillment Fixed (Rs)</label><input id="rule_fulfillment_default" value="50"></div>
           <div class="s-row"><label>Inwarding Fixed (Rs)</label><input id="rule_inwarding_default" value="5"></div>
         </div>
@@ -120,7 +121,7 @@
         <div class="header-title">
           <div>
             <h1>Blinkit Margin Calculator</h1>
-            <div class="header-subtitle">nexlev-style layout · level 1 + level 4 only</div>
+            <div class="header-subtitle">nexlev-style layout · all blinkit sheet models</div>
           </div>
           <div class="header-actions">
             <button id="load_latest" class="btn-hdr btn-hdr-outline">Load Latest</button>
@@ -138,7 +139,7 @@
           <div class="card-body">
             <input type="file" id="file_input" accept=".xlsx,.xls">
             <div class="upload-status" id="upload_status">Upload a workbook to start. Only the Blinkit sheet is used.</div>
-            <div class="pill">Blinkit sheet only · Level 1 + Level 4 only</div>
+            <div class="pill">Blinkit sheet only · all models</div>
           </div>
         </div>
 
@@ -156,6 +157,8 @@
               <div class="price-cell"><div class="price-cell-label">Final Blinkit Price</div><div class="price-cell-val" id="pr_blinkit">0</div></div>
               <div class="price-cell"><div class="price-cell-label">DP</div><div class="price-cell-val" id="pr_dp">0</div></div>
               <div class="price-cell"><div class="price-cell-label">NLC</div><div class="price-cell-val" id="pr_nlc">0</div></div>
+              <div class="price-cell"><div class="price-cell-label">Suggested Blinkit Selling Price</div><div class="price-cell-val" id="pr_suggested">0</div></div>
+              <div class="price-cell"><div class="price-cell-label">Suggested Price At Target Margin</div><div class="price-cell-val" id="pr_target_suggested">0</div></div>
             </div>
           </div>
         </div>
@@ -166,7 +169,12 @@
             <div class="muted" id="row_count">0 products</div>
           </div>
           <div class="card-body">
-            <div class="grid-2">
+            <div class="grid-3">
+              <div>
+                <div class="field"><label>Brand</label></div>
+                <input class="search-input" id="brand_search" placeholder="Search brand">
+                <select id="brand_filter"></select>
+              </div>
               <div>
                 <div class="field"><label>Model</label></div>
                 <input class="search-input" id="model_search" placeholder="Search model">
@@ -257,16 +265,16 @@
   </div>
 
   <script>
-    const STATE = { sessionId: null, rows: [], currentRow: null, originalRow: null, allModels: [], allSkus: [] };
-    const INPUT_IDS = ["blinkit_pricing","weight_kg","dp_value","nlc_value","storage2_value","commission_value","commission_pct_value","fulfillment_value","inwarding_value","rule_ad_pct","rule_return_pct","rule_oh_pct","rule_finance_pct","rule_gst_pct","rule_shipping_rate","rule_fulfillment_default","rule_inwarding_default"];
-    const RULE_DEFAULTS = { rule_ad_pct: "10", rule_return_pct: "4", rule_oh_pct: "5", rule_finance_pct: "3", rule_gst_pct: "18", rule_shipping_rate: "15", rule_fulfillment_default: "50", rule_inwarding_default: "5" };
+    const STATE = { sessionId: null, rows: [], currentRow: null, originalRow: null, allBrands: [], allModels: [], allSkus: [] };
+    const INPUT_IDS = ["blinkit_pricing","weight_kg","dp_value","nlc_value","storage2_value","commission_value","commission_pct_value","fulfillment_value","inwarding_value","rule_ad_pct","rule_return_pct","rule_oh_pct","rule_finance_pct","rule_gst_pct","rule_shipping_rate","rule_target_margin_pct","rule_fulfillment_default","rule_inwarding_default"];
+    const RULE_DEFAULTS = { rule_ad_pct: "10", rule_return_pct: "4", rule_oh_pct: "5", rule_finance_pct: "3", rule_gst_pct: "18", rule_shipping_rate: "15", rule_target_margin_pct: "10", rule_fulfillment_default: "50", rule_inwarding_default: "5" };
     const $ = (id) => document.getElementById(id);
     function toNumber(value) { const n = parseFloat(String(value ?? 0).replace(/,/g, "").replace(/%/g, "")); return Number.isFinite(n) ? n : 0; }
     function setInput(id, value, digits = 2) { const el = $(id); if (!el) return; el.value = typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : (value ?? ""); }
     function setText(id, value, digits = 2) { const el = $(id); if (!el) return; el.textContent = typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : (value ?? ""); }
     function filterSelect(inputId, selectId, values) { const query = ($(inputId).value || "").toLowerCase(); const filtered = values.filter((value) => value.toLowerCase().includes(query)); $(selectId).innerHTML = filtered.map((value) => `<option>${value}</option>`).join(""); if (filtered.length) $(selectId).value = filtered[0]; $(selectId).dispatchEvent(new Event("change")); }
     function getRowInput() { return { ...STATE.currentRow, blinkitSp: toNumber($("blinkit_pricing").value), weightKg: toNumber($("weight_kg").value), dpValue: toNumber($("dp_value").value), nlcValue: toNumber($("nlc_value").value), storage2Value: toNumber($("storage2_value").value), commissionValue: toNumber($("commission_value").value), commissionPctValue: toNumber($("commission_pct_value").value) }; }
-    function getRules() { return { adPct: toNumber($("rule_ad_pct").value), returnPct: toNumber($("rule_return_pct").value), ohPct: toNumber($("rule_oh_pct").value), financePct: toNumber($("rule_finance_pct").value), gstPct: toNumber($("rule_gst_pct").value), shippingRate: toNumber($("rule_shipping_rate").value), fulfillmentFixed: toNumber($("fulfillment_value").value || $("rule_fulfillment_default").value), inwardingFixed: toNumber($("inwarding_value").value || $("rule_inwarding_default").value) }; }
+    function getRules() { return { adPct: toNumber($("rule_ad_pct").value), returnPct: toNumber($("rule_return_pct").value), ohPct: toNumber($("rule_oh_pct").value), financePct: toNumber($("rule_finance_pct").value), gstPct: toNumber($("rule_gst_pct").value), shippingRate: toNumber($("rule_shipping_rate").value), targetMarginPct: toNumber($("rule_target_margin_pct").value), fulfillmentFixed: toNumber($("fulfillment_value").value || $("rule_fulfillment_default").value), inwardingFixed: toNumber($("inwarding_value").value || $("rule_inwarding_default").value) }; }
     function calculate(row) {
       const rules = getRules();
       const sellingPrice = row.blinkitSp || 0;
@@ -286,7 +294,14 @@
       const totalCost = dp + adCost + commissionValue + fulfillment + returnCost + storage2 + shipping + inwarding + oh + finance + gst;
       const margin = sellingPrice - totalCost;
       const marginPct = sellingPrice > 0 ? (margin / sellingPrice) * 100 : 0;
-      return { sellingPrice, dp, nlc: row.nlcValue || 0, commissionPct, totalCost, margin, marginPct, adCost, returnCost, shipping, oh, finance, gst, fulfillment, inwarding, rows: [["Procurement", "DP", dp], ["Growth Spend", `Ad Cost (${rules.adPct}%) + Return (${rules.returnPct}%)`, adCost + returnCost], ["Marketplace Fee", "Commission + Fulfillment + Storage (2 M)", commissionValue + fulfillment + storage2], ["Logistics", `Shipping (${rules.shippingRate}/kg) + Inwarding`, shipping + inwarding], ["Operating Cost", `OH (${rules.ohPct}%) + Finance (${rules.financePct}%)`, oh + finance], ["Taxes", `GST (${rules.gstPct}%)`, gst], ["Grand Total", "All above", totalCost]] };
+      const variablePct = (rules.adPct + rules.returnPct + rules.ohPct + rules.financePct) / 100;
+      const gstFactor = rules.gstPct > 0 ? (rules.gstPct / (100 + rules.gstPct)) : 0;
+      const contribution = 1 - variablePct - gstFactor;
+      const fixedBase = dp + commissionValue + fulfillment + storage2 + shipping + inwarding;
+      const suggestedPrice = contribution > 0 ? fixedBase / contribution : 0;
+      const targetContribution = contribution - (rules.targetMarginPct / 100);
+      const targetSuggestedPrice = targetContribution > 0 ? fixedBase / targetContribution : 0;
+      return { sellingPrice, dp, nlc: row.nlcValue || 0, commissionPct, totalCost, margin, marginPct, suggestedPrice, targetSuggestedPrice, adCost, returnCost, shipping, oh, finance, gst, fulfillment, inwarding, rows: [["Procurement", "DP", dp], ["Growth Spend", `Ad Cost (${rules.adPct}%) + Return (${rules.returnPct}%)`, adCost + returnCost], ["Marketplace Fee", "Commission + Fulfillment + Storage (2 M)", commissionValue + fulfillment + storage2], ["Logistics", `Shipping (${rules.shippingRate}/kg) + Inwarding`, shipping + inwarding], ["Operating Cost", `OH (${rules.ohPct}%) + Finance (${rules.financePct}%)`, oh + finance], ["Taxes", `GST (${rules.gstPct}%)`, gst], ["Grand Total", "All above", totalCost]] };
     }
     function renderCostRows(rows) { const total = rows.length ? rows[rows.length - 1][2] : 0; $("cost_rows").innerHTML = rows.map((row) => { const pct = total > 0 ? (row[2] / total) * 100 : 0; return `<tr><td>${row[0]}</td><td style="color:var(--text3);">${row[1]}</td><td class="mono">${row[2].toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td><span class="pct-pill">${pct.toFixed(1)}%</span></td></tr>`; }).join(""); }
     function updateView() {
@@ -296,10 +311,12 @@
       setText("m_total_cost", result.totalCost);
       setText("m_margin", result.margin);
       setText("m_margin_pct", result.marginPct);
-      setText("m_commission_pct", result.commissionPct * 100);
+      setText("m_commission_pct", result.commissionPct);
       setText("pr_blinkit", result.sellingPrice);
       setText("pr_dp", result.dp);
       setText("pr_nlc", result.nlc);
+      setText("pr_suggested", result.margin < 0 ? result.suggestedPrice : 0);
+      setText("pr_target_suggested", result.targetSuggestedPrice);
       setInput("calc_ad_cost", result.adCost);
       setInput("calc_return", result.returnCost);
       setInput("calc_shipping", result.shipping);
@@ -326,21 +343,74 @@
       setInput("nlc_value", row.nlcValue);
       setInput("storage2_value", row.storage2Value);
       setInput("commission_value", row.commissionValue);
-      setInput("commission_pct_value", (row.commissionPctValue || 0) * 100);
+      setInput("commission_pct_value", (row.commissionPctValue || 0) <= 1 ? (row.commissionPctValue || 0) * 100 : (row.commissionPctValue || 0));
       setInput("fulfillment_value", row.fulfillmentValue || RULE_DEFAULTS.rule_fulfillment_default);
       setInput("inwarding_value", row.inwardingValue || RULE_DEFAULTS.rule_inwarding_default);
       updateView();
     }
-    function loadSelectedRow() { const model = $("model").value; const sku = $("sku").value; const row = STATE.rows.find((item) => item.model === model && item.sku === sku) || STATE.rows.find((item) => item.sku === sku); if (row) hydrateRow(row); }
-    function populateSkus() { const model = $("model").value; STATE.allSkus = STATE.rows.filter((row) => row.model === model).map((row) => row.sku); $("sku").innerHTML = STATE.allSkus.map((sku) => `<option>${sku}</option>`).join(""); $("sku_search").value = ""; $("sku_search").oninput = () => filterSelect("sku_search", "sku", STATE.allSkus); loadSelectedRow(); }
-    function applySession(session) { STATE.sessionId = session.sessionId; STATE.rows = session.rows || []; STATE.allModels = [...new Set(STATE.rows.map((row) => row.model))].sort(); $("model").innerHTML = STATE.allModels.map((model) => `<option>${model}</option>`).join(""); $("model_search").value = ""; $("model_search").oninput = () => filterSelect("model_search", "model", STATE.allModels); $("row_count").textContent = `${STATE.rows.length} filtered products`; $("sheet_meta").textContent = `${session.fileName} · ${session.sheetName} · ${session.rowCount} rows`; $("upload_status").textContent = `Loaded ${session.rowCount} rows from Blinkit sheet after Level 1/Level 4 filtering.`; populateSkus(); }
+    function loadSelectedRow() {
+      const brand = $("brand_filter").value;
+      const model = $("model").value;
+      const sku = $("sku").value;
+      const row = STATE.rows.find((item) => item.brand === brand && item.model === model && item.sku === sku)
+        || STATE.rows.find((item) => item.model === model && item.sku === sku)
+        || STATE.rows.find((item) => item.sku === sku);
+      if (row) hydrateRow(row);
+    }
+    function populateSkus() {
+      const brand = $("brand_filter").value;
+      const model = $("model").value;
+      STATE.allSkus = STATE.rows
+        .filter((row) => row.brand === brand && row.model === model)
+        .map((row) => row.sku);
+      $("sku").innerHTML = STATE.allSkus.map((sku) => `<option>${sku}</option>`).join("");
+      $("sku_search").value = "";
+      $("sku_search").oninput = () => filterSelect("sku_search", "sku", STATE.allSkus);
+      loadSelectedRow();
+    }
+    function populateModels() {
+      const brand = $("brand_filter").value;
+      STATE.allModels = [...new Set(STATE.rows.filter((row) => row.brand === brand).map((row) => row.model))].sort();
+      $("model").innerHTML = STATE.allModels.map((model) => `<option>${model}</option>`).join("");
+      $("model_search").value = "";
+      $("model_search").oninput = () => filterSelect("model_search", "model", STATE.allModels);
+      populateSkus();
+    }
+    function applySession(session) {
+      STATE.sessionId = session.sessionId;
+      STATE.rows = session.rows || [];
+      STATE.allBrands = [...new Set(STATE.rows.map((row) => row.brand).filter(Boolean))].sort();
+      $("brand_filter").innerHTML = STATE.allBrands.map((brand) => `<option>${brand}</option>`).join("");
+      $("brand_search").value = "";
+      $("brand_search").oninput = () => filterSelect("brand_search", "brand_filter", STATE.allBrands);
+      $("row_count").textContent = `${STATE.rows.length} products`;
+      $("sheet_meta").textContent = `${session.fileName} · ${session.sheetName} · ${session.rowCount} rows`;
+      $("upload_status").textContent = `Loaded ${session.rowCount} rows from the Blinkit sheet.`;
+      populateModels();
+    }
     async function loadLatest() { const response = await fetch("/api/status"); const payload = await response.json(); if (payload.session) applySession(payload.session); }
     async function uploadFile(file) { const fd = new FormData(); fd.append("file", file); $("upload_status").textContent = "Uploading workbook..."; const response = await fetch("/api/upload", { method: "POST", body: fd }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "Upload failed"); applySession(payload.session); }
-    function exportMargin() { if (!STATE.sessionId) return; window.location.href = `/api/export?session_id=${encodeURIComponent(STATE.sessionId)}`; }
+    function exportMargin() {
+      if (!STATE.sessionId) return;
+      const params = new URLSearchParams({
+        session_id: STATE.sessionId,
+        rule_ad_pct: $("rule_ad_pct").value,
+        rule_return_pct: $("rule_return_pct").value,
+        rule_oh_pct: $("rule_oh_pct").value,
+        rule_finance_pct: $("rule_finance_pct").value,
+        rule_gst_pct: $("rule_gst_pct").value,
+        rule_shipping_rate: $("rule_shipping_rate").value,
+        rule_target_margin_pct: $("rule_target_margin_pct").value,
+        rule_fulfillment_default: $("rule_fulfillment_default").value,
+        rule_inwarding_default: $("rule_inwarding_default").value
+      });
+      window.location.href = `/api/export?${params.toString()}`;
+    }
     function resetRules() { Object.entries(RULE_DEFAULTS).forEach(([id, value]) => setInput(id, value)); if (STATE.currentRow) { setInput("fulfillment_value", STATE.originalRow?.fulfillmentValue || RULE_DEFAULTS.rule_fulfillment_default); setInput("inwarding_value", STATE.originalRow?.inwardingValue || RULE_DEFAULTS.rule_inwarding_default); updateView(); } }
     document.addEventListener("DOMContentLoaded", () => {
       Object.entries(RULE_DEFAULTS).forEach(([id, value]) => setInput(id, value));
       INPUT_IDS.forEach((id) => { const el = $(id); if (el) el.addEventListener("input", updateView); });
+      $("brand_filter").addEventListener("change", populateModels);
       $("model").addEventListener("change", populateSkus);
       $("sku").addEventListener("change", loadSelectedRow);
       $("load_latest").addEventListener("click", loadLatest);
@@ -354,3 +424,4 @@
   </script>
 </body>
 </html>
+
