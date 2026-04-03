@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blinkit Margin Calculator</title>
+  <style>
+    :root {
+      --bg: #f6f7ef;
+      --panel: #fff;
+      --line: #dce6d8;
+      --text: #173122;
+      --muted: #617562;
+      --green: #1c7e46;
+      --green-soft: #e9f7ed;
+      --yellow: #f4cc47;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); }
+    .page { max-width: 1240px; margin: 0 auto; padding: 24px; }
+    .hero, .card, .kpi, .price { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; }
+    .hero { padding: 24px; margin-bottom: 16px; }
+    .hero h1 { margin: 0 0 8px; }
+    .hero p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+    .card-body { padding: 18px; }
+    .muted { color: var(--muted); }
+    .pill { display: inline-block; padding: 7px 10px; border-radius: 999px; background: var(--green-soft); color: var(--green); font-size: 12px; font-weight: 700; }
+    .grid { display: grid; gap: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+    .prices { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+    .kpi, .price { padding: 16px; }
+    .label { margin-bottom: 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+    .value { font-family: Consolas, monospace; font-size: 24px; font-weight: 700; }
+    .two, .three, .four { display: grid; gap: 12px; }
+    .two { grid-template-columns: repeat(2, 1fr); }
+    .three { grid-template-columns: repeat(3, 1fr); }
+    .four { grid-template-columns: repeat(4, 1fr); }
+    .field label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    .field input, .field select, button {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .field input[disabled] { background: #f3f6f0; color: #6f7f70; }
+    button { cursor: pointer; font-weight: 700; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .primary { background: var(--green); border-color: var(--green); color: #fff; }
+    .accent { background: var(--yellow); border-color: #e0bc40; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .mono { font-family: Consolas, monospace; }
+    @media (max-width: 960px) {
+      .kpis, .prices, .four, .three, .two { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>Blinkit Margin Calculator</h1>
+      <p>This tool reads the <strong>Blinkit</strong> sheet from your Excel file, keeps only products where <strong>Expansion Level</strong> is <strong>Level 1</strong> or <strong>Level 4</strong>, and mirrors the workbook logic: Ad Cost 10%, Return 4%, OH 5%, Finance 3%, GST on inclusive price, shipping from weight, and row-specific commission formulas.</p>
+    </section>
+
+    <section class="card" style="margin-bottom:16px;">
+      <div class="card-head">
+        <strong>Add File</strong>
+        <span class="muted" id="sheet_meta">No file loaded</span>
+      </div>
+      <div class="card-body">
+        <div class="actions" style="margin-bottom:10px;">
+          <input type="file" id="file_input" accept=".xlsx,.xls">
+          <button id="load_latest" class="accent">Load Latest</button>
+          <button id="export_margin" class="primary">Export Margin</button>
+        </div>
+        <div id="upload_status" class="muted">Upload a workbook to start. Filter is fixed to Level 1 and Level 4.</div>
+        <div style="margin-top:10px;"><span class="pill">Blinkit sheet only · Level 1 + Level 4 only</span></div>
+      </div>
+    </section>
+
+    <section class="kpis">
+      <div class="kpi"><div class="label">Total Cost</div><div class="value" id="m_total_cost">0</div></div>
+      <div class="kpi"><div class="label">Margin</div><div class="value" id="m_margin">0</div></div>
+      <div class="kpi"><div class="label">Margin %</div><div class="value" id="m_margin_pct">0</div></div>
+      <div class="kpi"><div class="label">Quantity</div><div class="value" id="m_qty">0</div></div>
+      <div class="kpi"><div class="label">Margin Value</div><div class="value" id="m_margin_value">0</div></div>
+    </section>
+
+    <section class="prices">
+      <div class="price"><div class="label">Blinkit Pricing</div><div class="value" id="pr_blinkit">0</div></div>
+      <div class="price"><div class="label">Amazon BAU</div><div class="value" id="pr_amazon">0</div></div>
+      <div class="price"><div class="label">DP</div><div class="value" id="pr_dp">0</div></div>
+      <div class="price"><div class="label">NLC</div><div class="value" id="pr_nlc">0</div></div>
+      <div class="price"><div class="label">Commission %</div><div class="value" id="pr_commission_pct">0</div></div>
+    </section>
+
+    <section class="grid">
+      <section class="card">
+        <div class="card-head">
+          <strong>Product Selection</strong>
+          <span class="muted" id="row_count">0 products</span>
+        </div>
+        <div class="card-body">
+          <div class="two">
+            <div class="field">
+              <label>Model</label>
+              <input id="model_search" placeholder="Search model">
+              <select id="model" style="margin-top:8px;"></select>
+            </div>
+            <div class="field">
+              <label>SKU</label>
+              <input id="sku_search" placeholder="Search SKU">
+              <select id="sku" style="margin-top:8px;"></select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <strong>Product Info</strong>
+          <button id="reset_row" style="max-width:180px;">Reset SKU</button>
+        </div>
+        <div class="card-body">
+          <div class="four">
+            <div class="field"><label>Status</label><input id="status" disabled></div>
+            <div class="field"><label>Expansion Level</label><input id="expansion_level" disabled></div>
+            <div class="field"><label>Brand</label><input id="brand" disabled></div>
+            <div class="field"><label>Model</label><input id="model_no" disabled></div>
+            <div class="field"><label>SKU</label><input id="sku_code" disabled></div>
+            <div class="field"><label>Item ID</label><input id="item_id" disabled></div>
+            <div class="field"><label>ASIN</label><input id="asin" disabled></div>
+            <div class="field"><label>HSN</label><input id="hsn" disabled></div>
+            <div class="field"><label>Category L1</label><input id="category" disabled></div>
+            <div class="field"><label>Category L2</label><input id="sub_category" disabled></div>
+            <div class="field"><label>Description</label><input id="product_name" disabled></div>
+            <div class="field"><label>Remark</label><input id="remark" disabled></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <strong>Editable Inputs</strong>
+          <span class="muted">These drive the workbook formulas</span>
+        </div>
+        <div class="card-body">
+          <div class="three">
+            <div class="field"><label>Product Weight (Kg)</label><input id="weight_kg"></div>
+            <div class="field"><label>Blinkit Pricing</label><input id="blinkit_pricing"></div>
+            <div class="field"><label>Amazon BAU</label><input id="amazon_bau"></div>
+            <div class="field"><label>DP</label><input id="dp_value"></div>
+            <div class="field"><label>NLC</label><input id="nlc_value"></div>
+            <div class="field"><label>Fulfillment</label><input id="fulfillment_value"></div>
+            <div class="field"><label>Storage (2 M)</label><input id="storage2_value"></div>
+            <div class="field"><label>Storage (3 M)</label><input id="storage3_value"></div>
+            <div class="field"><label>Inwarding</label><input id="inwarding_value"></div>
+            <div class="field"><label>Quantity</label><input id="quantity_value"></div>
+            <div class="field"><label>Commission % Override</label><input id="commission_pct_override" placeholder="Optional"></div>
+            <div class="field"><label>Commission Formula</label><input id="commission_formula" disabled></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <strong>Calculated Cost Heads</strong>
+          <span class="muted">Mirrors the Blinkit sheet formulas</span>
+        </div>
+        <div class="card-body">
+          <div class="four">
+            <div class="field"><label>Ad Cost</label><input id="calc_ad_cost" disabled></div>
+            <div class="field"><label>Commission</label><input id="calc_commission" disabled></div>
+            <div class="field"><label>Return</label><input id="calc_return" disabled></div>
+            <div class="field"><label>Shipping (15/KG)</label><input id="calc_shipping" disabled></div>
+            <div class="field"><label>OH</label><input id="calc_oh" disabled></div>
+            <div class="field"><label>Finance</label><input id="calc_finance" disabled></div>
+            <div class="field"><label>GST</label><input id="calc_gst" disabled></div>
+            <div class="field"><label>Value</label><input id="calc_value" disabled></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <strong>Cost Breakup</strong>
+          <span class="muted">Exact sheet buckets</span>
+        </div>
+        <div class="card-body" style="padding-top:0;">
+          <table>
+            <thead>
+              <tr><th>Bucket</th><th>Consists Of</th><th>Total</th><th>% of Total</th></tr>
+            </thead>
+            <tbody id="cost_rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const STATE = { sessionId: null, rows: [], currentRow: null, originalRow: null, allModels: [], allSkus: [] };
+    const INPUT_IDS = ["weight_kg","blinkit_pricing","amazon_bau","dp_value","nlc_value","fulfillment_value","storage2_value","storage3_value","inwarding_value","quantity_value","commission_pct_override"];
+    const $ = (id) => document.getElementById(id);
+
+    function toNumber(value) {
+      const n = parseFloat(String(value ?? 0).replace(/,/g, "").replace(/%/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function setValue(id, value, digits = 2) {
+      const el = $(id);
+      if (!el) return;
+      el.value = typeof value === "number"
+        ? value.toLocaleString(undefined, { maximumFractionDigits: digits })
+        : (value ?? "");
+    }
+
+    function setText(id, value, digits = 2) {
+      const el = $(id);
+      if (!el) return;
+      el.textContent = typeof value === "number"
+        ? value.toLocaleString(undefined, { maximumFractionDigits: digits })
+        : (value ?? "");
+    }
+
+    function filterSelect(inputId, selectId, values) {
+      const query = ($(inputId).value || "").toLowerCase();
+      const filtered = values.filter((value) => value.toLowerCase().includes(query));
+      $(selectId).innerHTML = filtered.map((value) => `<option>${value}</option>`).join("");
+      if (filtered.length) $(selectId).value = filtered[0];
+      $(selectId).dispatchEvent(new Event("change"));
+    }
+
+    function evalExcelFormula(formula, context) {
+      if (!formula) return null;
+      let expr = formula.trim();
+      const refs = {
+        AF: "price", AH: "quantity", B: "weight",
+        O: "dp", P: "nlc", Q: "adCost", R: "commission", S: "fulfillment", T: "returnCost",
+        U: "storage2", V: "storage3", W: "shipping", X: "inwarding", Y: "oh", Z: "finance",
+        AA: "gst", AB: "totalCost", AC: "margin", AD: "marginPct", AG: "amazonBau", AI: "value"
+      };
+
+      Object.entries(refs).forEach(([column, name]) => {
+        expr = expr.replace(new RegExp(`${column}\\d+`, "g"), name);
+      });
+
+      expr = expr.replace(/(\d+(?:\.\d+)?)%/g, "($1/100)");
+      expr = expr.replace(/IF\(/g, "ifFn(");
+
+      const fn = new Function(
+        "context",
+        "ifFn",
+        `with (context) { return ${expr}; }`
+      );
+      return fn(context, (cond, yes, no) => (cond ? yes : no));
+    }
+
+    function getInputRow() {
+      return {
+        ...STATE.currentRow,
+        weightKg: toNumber($("weight_kg").value),
+        blinkitSp: toNumber($("blinkit_pricing").value),
+        amazonBau: toNumber($("amazon_bau").value),
+        dpValue: toNumber($("dp_value").value),
+        nlcValue: toNumber($("nlc_value").value),
+        fulfillmentValue: toNumber($("fulfillment_value").value),
+        storage2Value: toNumber($("storage2_value").value),
+        storage3Value: toNumber($("storage3_value").value),
+        inwardingValue: toNumber($("inwarding_value").value),
+        quantityValue: toNumber($("quantity_value").value),
+        commissionOverride: toNumber($("commission_pct_override").value)
+      };
+    }
+
+    function calculate(row) {
+      const price = row.blinkitSp || 0;
+      const quantity = row.quantityValue || 0;
+      const weight = row.weightKg || 0;
+      const dp = row.dpValue || 0;
+      const nlc = row.nlcValue || 0;
+      const fulfillment = row.fulfillmentValue || 0;
+      const storage2 = row.storage2Value || 0;
+      const storage3 = row.storage3Value || 0;
+      const inwarding = row.inwardingValue || 0;
+      const amazonBau = row.amazonBau || 0;
+      const context = { price, quantity, weight, dp, nlc, fulfillment, storage2, storage3, inwarding, amazonBau };
+
+      const adCost = evalExcelFormula(row.formulas?.adCost, context) ?? row.adCostValue ?? (price * 0.10);
+      let commission = evalExcelFormula(row.formulas?.commission, { ...context, adCost }) ?? row.commissionValue ?? 0;
+      if (row.commissionOverride > 0) {
+        commission = price * (row.commissionOverride / 100);
+      }
+      const returnCost = evalExcelFormula(row.formulas?.returnCost, { ...context, adCost, commission }) ?? row.returnValue ?? (price * 0.04);
+      const shipping = evalExcelFormula(row.formulas?.shipping, { ...context, adCost, commission, returnCost }) ?? row.shippingValue ?? (weight * 15);
+      const oh = evalExcelFormula(row.formulas?.oh, { ...context, adCost, commission, returnCost, shipping }) ?? row.ohValue ?? (price * 0.05);
+      const finance = evalExcelFormula(row.formulas?.finance, { ...context, adCost, commission, returnCost, shipping, oh }) ?? row.financeValue ?? (price * 0.03);
+      const gst = evalExcelFormula(row.formulas?.gst, { ...context, adCost, commission, returnCost, shipping, oh, finance }) ?? row.gstValue ?? (price - price / 1.18);
+      const totalCost = evalExcelFormula(row.formulas?.totalCost, { ...context, adCost, commission, returnCost, shipping, oh, finance, gst }) ??
+        (dp + adCost + commission + fulfillment + returnCost + storage2 + shipping + inwarding + oh + finance + gst);
+      const margin = evalExcelFormula(row.formulas?.margin, { ...context, adCost, commission, returnCost, shipping, oh, finance, gst, totalCost }) ?? (price - totalCost);
+      const marginPct = evalExcelFormula(row.formulas?.marginPct, { ...context, adCost, commission, returnCost, shipping, oh, finance, gst, totalCost, margin }) ?? (price > 0 ? margin / price : 0);
+      const value = evalExcelFormula(row.formulas?.value, { ...context, adCost, commission, returnCost, shipping, oh, finance, gst, totalCost, margin, marginPct }) ?? (quantity * price);
+      const marginValue = (quantity * margin);
+      const commissionPct = price > 0 ? (commission / price) * 100 : 0;
+
+      return {
+        adCost, commission, returnCost, shipping, oh, finance, gst,
+        totalCost, margin, marginPct, quantity, value, marginValue, commissionPct,
+        rows: [
+          ["DP", "DP", dp],
+          ["Ad Cost", "Blinkit Pricing * 10%", adCost],
+          ["Commission", "Sheet formula", commission],
+          ["Fulfillment", "Sheet value", fulfillment],
+          ["Return", "Blinkit Pricing * 4%", returnCost],
+          ["Storage (2 M)", "Sheet value", storage2],
+          ["Shipping", "Weight * 15", shipping],
+          ["Inwarding", "Sheet value", inwarding],
+          ["OH", "Blinkit Pricing * 5%", oh],
+          ["Finance", "Blinkit Pricing * 3%", finance],
+          ["GST", "Blinkit Pricing - Blinkit Pricing / 1.18", gst],
+          ["Grand Total", "Workbook total cost", totalCost]
+        ]
+      };
+    }
+
+    function renderCosts(rows) {
+      const total = rows.length ? rows[rows.length - 1][2] : 0;
+      $("cost_rows").innerHTML = rows.map((row) => {
+        const pct = total > 0 ? (row[2] / total) * 100 : 0;
+        return `<tr><td>${row[0]}</td><td>${row[1]}</td><td class="mono">${row[2].toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td class="mono">${pct.toFixed(1)}%</td></tr>`;
+      }).join("");
+    }
+
+    function updateView() {
+      if (!STATE.currentRow) return;
+      const row = getInputRow();
+      const result = calculate(row);
+      setText("m_total_cost", result.totalCost);
+      setText("m_margin", result.margin);
+      setText("m_margin_pct", result.marginPct * 100);
+      setText("m_qty", result.quantity, 0);
+      setText("m_margin_value", result.marginValue);
+
+      setText("pr_blinkit", row.blinkitSp);
+      setText("pr_amazon", row.amazonBau);
+      setText("pr_dp", row.dpValue);
+      setText("pr_nlc", row.nlcValue);
+      setText("pr_commission_pct", result.commissionPct);
+
+      setValue("calc_ad_cost", result.adCost);
+      setValue("calc_commission", result.commission);
+      setValue("calc_return", result.returnCost);
+      setValue("calc_shipping", result.shipping);
+      setValue("calc_oh", result.oh);
+      setValue("calc_finance", result.finance);
+      setValue("calc_gst", result.gst);
+      setValue("calc_value", result.value);
+
+      renderCosts(result.rows);
+    }
+
+    function hydrateRow(row) {
+      STATE.currentRow = JSON.parse(JSON.stringify(row));
+      STATE.originalRow = JSON.parse(JSON.stringify(row));
+
+      setValue("status", row.status);
+      setValue("expansion_level", row.expansionLevel);
+      setValue("brand", row.brand);
+      setValue("model_no", row.model);
+      setValue("sku_code", row.sku);
+      setValue("item_id", row.itemId);
+      setValue("asin", row.asin);
+      setValue("hsn", row.hsn);
+      setValue("category", row.category);
+      setValue("sub_category", row.subCategory);
+      setValue("product_name", row.productName);
+      setValue("remark", row.remark);
+
+      setValue("weight_kg", row.weightKg);
+      setValue("blinkit_pricing", row.blinkitSp);
+      setValue("amazon_bau", row.amazonBau);
+      setValue("dp_value", row.dpValue);
+      setValue("nlc_value", row.nlcValue);
+      setValue("fulfillment_value", row.fulfillmentValue);
+      setValue("storage2_value", row.storage2Value);
+      setValue("storage3_value", row.storage3Value);
+      setValue("inwarding_value", row.inwardingValue);
+      setValue("quantity_value", row.quantityValue, 0);
+      setValue("commission_pct_override", "");
+      setValue("commission_formula", row.formulas?.commission || "No formula");
+
+      updateView();
+    }
+
+    function loadSelectedRow() {
+      const model = $("model").value;
+      const sku = $("sku").value;
+      const row = STATE.rows.find((item) => item.model === model && item.sku === sku) || STATE.rows.find((item) => item.sku === sku);
+      if (row) hydrateRow(row);
+    }
+
+    function populateSkus() {
+      const model = $("model").value;
+      STATE.allSkus = STATE.rows.filter((row) => row.model === model).map((row) => row.sku);
+      $("sku").innerHTML = STATE.allSkus.map((sku) => `<option>${sku}</option>`).join("");
+      $("sku_search").value = "";
+      $("sku_search").oninput = () => filterSelect("sku_search", "sku", STATE.allSkus);
+      loadSelectedRow();
+    }
+
+    function applySession(session) {
+      STATE.sessionId = session.sessionId;
+      STATE.rows = session.rows || [];
+      STATE.allModels = [...new Set(STATE.rows.map((row) => row.model))].sort();
+      $("model").innerHTML = STATE.allModels.map((model) => `<option>${model}</option>`).join("");
+      $("model_search").value = "";
+      $("model_search").oninput = () => filterSelect("model_search", "model", STATE.allModels);
+      $("row_count").textContent = `${STATE.rows.length} filtered products`;
+      $("sheet_meta").textContent = `${session.fileName} · ${session.sheetName} · ${session.rowCount} rows`;
+      $("upload_status").textContent = `Loaded ${session.rowCount} rows from Blinkit sheet after Level 1/Level 4 filtering.`;
+      populateSkus();
+    }
+
+    async function loadLatest() {
+      const response = await fetch("/api/status");
+      const payload = await response.json();
+      if (payload.session) applySession(payload.session);
+    }
+
+    async function uploadFile(file) {
+      const fd = new FormData();
+      fd.append("file", file);
+      $("upload_status").textContent = "Uploading workbook...";
+      const response = await fetch("/api/upload", { method: "POST", body: fd });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Upload failed");
+      applySession(payload.session);
+    }
+
+    function exportMargin() {
+      if (!STATE.sessionId) return;
+      window.location.href = `/api/export?session_id=${encodeURIComponent(STATE.sessionId)}`;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      INPUT_IDS.forEach((id) => $(id).addEventListener("input", updateView));
+      $("model").addEventListener("change", populateSkus);
+      $("sku").addEventListener("change", loadSelectedRow);
+      $("load_latest").addEventListener("click", loadLatest);
+      $("export_margin").addEventListener("click", exportMargin);
+      $("reset_row").addEventListener("click", () => {
+        if (STATE.originalRow) hydrateRow(STATE.originalRow);
+      });
+      $("file_input").addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+          await uploadFile(file);
+        } catch (error) {
+          $("upload_status").textContent = error.message;
+        }
+      });
+      renderCosts([]);
+      loadLatest();
+    });
+  </script>
+</body>
+</html>
