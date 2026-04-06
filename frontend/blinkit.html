@@ -125,7 +125,8 @@
           </div>
           <div class="header-actions">
             <button id="load_latest" class="btn-hdr btn-hdr-outline">Load Latest</button>
-            <button id="export_margin" class="btn-hdr btn-hdr-green">Export Margin</button>
+            <button id="export_brand_wise" class="btn-hdr btn-hdr-outline">Export Brand</button>
+            <button id="export_margin" class="btn-hdr btn-hdr-green">Export All</button>
           </div>
         </div>
       </div>
@@ -273,17 +274,28 @@
     function setInput(id, value, digits = 2) { const el = $(id); if (!el) return; el.value = typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : (value ?? ""); }
     function setText(id, value, digits = 2) { const el = $(id); if (!el) return; el.textContent = typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : (value ?? ""); }
     function filterSelect(inputId, selectId, values) {
-  const query = ($(inputId).value || "").toLowerCase();
-  const filtered = values.filter(v =>
-    String(v).toLowerCase().includes(query)
-  );
-  const select = $(selectId);
-  // Only update options
-  select.innerHTML = filtered.map(v => `<option>${v}</option>`).join('');
-  // DO NOT trigger change automatically ❌
-}
+      const query = ($(inputId).value || "").toLowerCase();
+      const filtered = values.filter(v => String(v).toLowerCase().includes(query));
+      const select = $(selectId);
+      select.innerHTML = filtered.map(v => `<option>${v}</option>`).join('');
+      if (selectId === "brand_filter") { populateModels(); }
+      else if (selectId === "model") { populateSkus(); }
+      else if (selectId === "sku") { loadSelectedRow(); }
+    }
     function getRowInput() { return { ...STATE.currentRow, blinkitSp: toNumber($("blinkit_pricing").value), weightKg: toNumber($("weight_kg").value), dpValue: toNumber($("dp_value").value), nlcValue: toNumber($("nlc_value").value), storage2Value: toNumber($("storage2_value").value), commissionValue: toNumber($("commission_value").value), commissionPctValue: toNumber($("commission_pct_value").value) }; }
-    function getRules() { return { adPct: toNumber($("rule_ad_pct").value), returnPct: toNumber($("rule_return_pct").value), ohPct: toNumber($("rule_oh_pct").value), financePct: toNumber($("rule_finance_pct").value), gstPct: toNumber($("rule_gst_pct").value), shippingRate: toNumber($("rule_shipping_rate").value), targetMarginPct: toNumber($("rule_target_margin_pct").value), fulfillmentFixed: toNumber($("fulfillment_value").value || $("rule_fulfillment_default").value), inwardingFixed: toNumber($("inwarding_value").value || $("rule_inwarding_default").value) }; }
+    function getRules() {
+      return {
+        adPct: toNumber($("rule_ad_pct").value),
+        returnPct: toNumber($("rule_return_pct").value),
+        ohPct: toNumber($("rule_oh_pct").value),
+        financePct: toNumber($("rule_finance_pct").value),
+        gstPct: toNumber($("rule_gst_pct").value),
+        shippingRate: toNumber($("rule_shipping_rate").value),
+        targetMarginPct: toNumber($("rule_target_margin_pct").value),
+        fulfillmentFixed: toNumber($("fulfillment_value").value) || toNumber($("rule_fulfillment_default").value),
+        inwardingFixed: toNumber($("inwarding_value").value) || toNumber($("rule_inwarding_default").value),
+      };
+    }
     function calculate(row) {
       const rules = getRules();
       const sellingPrice = row.blinkitSp || 0;
@@ -413,41 +425,106 @@
         rule_fulfillment_default: $("rule_fulfillment_default").value,
         rule_inwarding_default: $("rule_inwarding_default").value
       });
-      function exportToCSV() {
-  if (!STATE.rows.length) {
-    alert("No data to export");
-    return;
-  }
-
-  const headers = Object.keys(STATE.rows[0]);
-
-  const csv = [
-    headers.join(","),
-    ...STATE.rows.map(row =>
-      headers.map(h => `"${row[h] ?? ""}"`).join(",")
-    )
-  ].join("\n");
-
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "blinkit_export.csv";
-  a.click();
-
-  URL.revokeObjectURL(url);
-}}`;
+      window.location.href = `/api/export?${params.toString()}`;
     }
-    function resetRules() { Object.entries(RULE_DEFAULTS).forEach(([id, value]) => setInput(id, value)); if (STATE.currentRow) { setInput("fulfillment_value", STATE.originalRow?.fulfillmentValue || RULE_DEFAULTS.rule_fulfillment_default); setInput("inwarding_value", STATE.originalRow?.inwardingValue || RULE_DEFAULTS.rule_inwarding_default); updateView(); } }
+    function buildCalculatedExportRow(row) {
+      const rules = getRules();
+      const sp = toNumber(row.blinkitSp);
+      const dp = toNumber(row.dpValue);
+      const weightKg = toNumber(row.weightKg);
+      const storage2 = toNumber(row.storage2Value);
+      const commissionValue = toNumber(row.commissionValue);
+      const commissionPct = toNumber(row.commissionPctValue) <= 1 ? toNumber(row.commissionPctValue) * 100 : toNumber(row.commissionPctValue);
+      const fulfillment = toNumber(row.fulfillmentValue) || rules.fulfillmentFixed;
+      const inwarding = toNumber(row.inwardingValue) || rules.inwardingFixed;
+      const adCost = sp * rules.adPct / 100;
+      const returnCost = sp * rules.returnPct / 100;
+      const shipping = weightKg * rules.shippingRate;
+      const oh = sp * rules.ohPct / 100;
+      const finance = sp * rules.financePct / 100;
+      const gst = rules.gstPct > 0 ? sp - (sp / (1 + rules.gstPct / 100)) : 0;
+      const totalCost = dp + adCost + commissionValue + fulfillment + returnCost + storage2 + shipping + inwarding + oh + finance + gst;
+      const margin = sp - totalCost;
+      const marginPct = sp > 0 ? (margin / sp) * 100 : 0;
+      const variablePct = (rules.adPct + rules.returnPct + rules.ohPct + rules.financePct) / 100;
+      const gstFactor = rules.gstPct > 0 ? (rules.gstPct / (100 + rules.gstPct)) : 0;
+      const contribution = 1 - variablePct - gstFactor;
+      const fixedBase = dp + commissionValue + fulfillment + storage2 + shipping + inwarding;
+      const suggestedPrice = contribution > 0 ? fixedBase / contribution : 0;
+      const targetContribution = contribution - (rules.targetMarginPct / 100);
+      const targetSuggestedPrice = targetContribution > 0 ? fixedBase / targetContribution : 0;
+      return {
+        Brand: row.brand, Model: row.model, SKU: row.sku,
+        "Expansion Level": row.expansionLevel, "Item ID": row.itemId, ASIN: row.asin, "Category L1": row.category,
+        "Final Blinkit Price": sp, "Product Weight (Kg)": weightKg,
+        DP: dp, NLC: toNumber(row.nlcValue), "Storage (2 M)": storage2,
+        "Commission Value": commissionValue, "Commission %": commissionPct,
+        Fulfillment: fulfillment, Inwarding: inwarding,
+        "Ad Cost": adCost, Return: returnCost, Shipping: shipping,
+        OH: oh, Finance: finance, GST: gst,
+        "Total Cost": +totalCost.toFixed(2), Margin: +margin.toFixed(2),
+        "Margin %": +marginPct.toFixed(2),
+        "Suggested Selling Price": margin < 0 ? +suggestedPrice.toFixed(2) : 0,
+        "Suggested Price At Target Margin": +targetSuggestedPrice.toFixed(2),
+      };
+    }
+    function rowsToCSV(rows) {
+      if (!rows.length) return "";
+      const headers = Object.keys(rows[0]);
+      return [headers.join(","), ...rows.map(r => headers.map(h => `"${r[h] ?? ""}"`).join(","))].join("\n");
+    }
+    function downloadCSV(csv, filename) {
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function exportToCSV() {
+      if (!STATE.rows.length) { alert("No data to export"); return; }
+      const exportRows = STATE.rows.map(buildCalculatedExportRow);
+      downloadCSV(rowsToCSV(exportRows), "blinkit_all_export.csv");
+    }
+    function exportBrandWise() {
+      if (!STATE.rows.length) { alert("No data to export"); return; }
+      const brand = $("brand_filter").value;
+      if (!brand) { alert("Please select a brand first"); return; }
+      const filtered = STATE.rows.filter(r => r.brand === brand);
+      if (!filtered.length) { alert("No rows found for selected brand"); return; }
+      const exportRows = filtered.map(buildCalculatedExportRow);
+      downloadCSV(rowsToCSV(exportRows), `blinkit_${brand.replace(/\s+/g, "_")}_export.csv`);
+    }
+    function onRuleDefaultChange() {
+      if (!STATE.originalRow) return;
+      const rowFulfillment = toNumber(STATE.originalRow.fulfillmentValue);
+      const rowInwarding = toNumber(STATE.originalRow.inwardingValue);
+      if (!rowFulfillment) setInput("fulfillment_value", toNumber($("rule_fulfillment_default").value));
+      if (!rowInwarding) setInput("inwarding_value", toNumber($("rule_inwarding_default").value));
+      updateView();
+    }
+    function resetRules() {
+      Object.entries(RULE_DEFAULTS).forEach(([id, value]) => setInput(id, value));
+      if (STATE.currentRow) {
+        setInput("fulfillment_value", STATE.originalRow?.fulfillmentValue || RULE_DEFAULTS.rule_fulfillment_default);
+        setInput("inwarding_value", STATE.originalRow?.inwardingValue || RULE_DEFAULTS.rule_inwarding_default);
+        updateView();
+      }
+    }
     document.addEventListener("DOMContentLoaded", () => {
       Object.entries(RULE_DEFAULTS).forEach(([id, value]) => setInput(id, value));
-      INPUT_IDS.forEach((id) => { const el = $(id); if (el) el.addEventListener("input", updateView); });
+      INPUT_IDS.forEach((id) => {
+        const el = $(id); if (!el) return;
+        if (id === "rule_fulfillment_default" || id === "rule_inwarding_default") {
+          el.addEventListener("input", onRuleDefaultChange);
+        } else {
+          el.addEventListener("input", updateView);
+        }
+      });
       $("brand_filter").addEventListener("change", populateModels);
       $("model").addEventListener("change", populateSkus);
       $("sku").addEventListener("change", loadSelectedRow);
       $("load_latest").addEventListener("click", loadLatest);
       $("export_margin").addEventListener("click", exportToCSV);
+      $("export_brand_wise").addEventListener("click", exportBrandWise);
       $("reset_rules").addEventListener("click", resetRules);
       $("reset_row").addEventListener("click", () => { if (STATE.originalRow) hydrateRow(STATE.originalRow); });
       $("file_input").addEventListener("change", async (event) => { const file = event.target.files[0]; if (!file) return; try { await uploadFile(file); } catch (error) { $("upload_status").textContent = error.message; } });
@@ -457,4 +534,3 @@
   </script>
 </body>
 </html>
-
